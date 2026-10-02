@@ -82,7 +82,7 @@ Example (idle + lid-closed coverage on AC power):
   some report that no `caffeinate` flag overrides lid-close sleep and
   `sudo pmset -a disablesleep 1` (restored with `0` when done) is needed.
 - Test it safely: on AC power, close the lid for a couple of minutes and open
-  it again — if the session (and VPN) survived, `-s` covers your machine.
+  it again — if the agent's session survived, `-s` covers your machine.
 
 ## Verify
 
