@@ -3,10 +3,15 @@
 A macOS plugin for [DeepSeek Harness (DSH)](https://github.com/deepseek-ai/deepseek-harness)
 that keeps the Mac from sleeping while an agent is working.
 
-The pain: a corporate VPN connection dies when the MacBook falls asleep, so any
-agent using corporate services (Jira, Confluence, TeamCity, code review, …)
-stops mid-task. This plugin holds a power assertion for exactly the time at
-least one DSH agent is running — no timer windows, no manual toggling.
+## The problem
+
+When the MacBook goes to sleep, the agent stops working: the session freezes
+mid-task, open connections are dropped, and the work is lost or has to be
+redone after the machine wakes. Long agent runs are fragile every time you
+step away from the machine.
+
+This plugin holds a power assertion for exactly the time at least one DSH
+agent is running — no timer windows, no manual toggling.
 
 ## How it works
 
