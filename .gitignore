@@ -1,0 +1,3 @@
+# Personal flag selection is installed into the DSH home, not committed.
+flags.json
+.DS_Store
