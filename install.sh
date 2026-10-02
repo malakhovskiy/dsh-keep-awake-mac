@@ -26,9 +26,11 @@ PATCH_FILE="$HOME_DIR/profiles/$PROFILE/cordis.patch.yml"
 
 [ -d "$HOME_DIR" ] || { echo "error: DSH home '$HOME_DIR' does not exist" >&2; exit 1; }
 
-# 1) Copy the plugin file.
+# 1) Copy the plugin files.
 mkdir -p "$DEST_DIR"
 cp "$SRC_DIR/keep-awake.mjs" "$DEST_DIR/keep-awake.mjs"
+cp "$SRC_DIR/sleep-guard.sh" "$DEST_DIR/sleep-guard.sh"
+chmod +x "$DEST_DIR/sleep-guard.sh"
 
 # 2) Register the file-path insert (with its default config block) in the
 #    profile patch. Idempotent: an existing keep-awake entry is left untouched.
@@ -39,8 +41,9 @@ import sys
 patch_file, plugin_path = sys.argv[1], sys.argv[2]
 entry = (
     "# Keeps the Mac awake while an agent works (dsh-keep-awake plugin).\n"
-    "# Toggle: enabled. Flags: idle=-i, system=-s (AC only, lid-closed),\n"
-    "# display=-d, disk=-m.\n"
+    "# Toggle: enabled. Flags: idle=-i, system=-s (AC only), display=-d,\n"
+    "# disk=-m. Lid-closed override (optional, needs the one-time sudoers\n"
+    "# rule from the README): lid: true\n"
     "- insert:\n"
     "  - id: keep-awake\n"
     f'    name: "{plugin_path}"\n'
@@ -51,6 +54,7 @@ entry = (
     "        system: true\n"
     "        display: false\n"
     "        disk: false\n"
+    "      lid: false\n"
 )
 try:
     with open(patch_file) as f:
@@ -70,6 +74,8 @@ print(f"registered in {patch_file}")
 PY
 
 echo
-echo "Installed: $DEST_DIR/keep-awake.mjs"
+echo "Installed: $DEST_DIR/keep-awake.mjs (+ sleep-guard.sh)"
 echo "A fresh install needs a DSH restart; later config changes in the profile patch apply live"
 echo "(while the DSH HMR plugin is enabled). Verify while an agent works: pgrep -fl caffeinate"
+echo "Optional: install the one-time sudoers rule (README, 'Lid-closed') and set 'lid: true'"
+echo "to keep the Mac awake with the lid closed while an agent runs."
