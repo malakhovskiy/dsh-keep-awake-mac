@@ -37,38 +37,61 @@ agent is running — no timer windows, no manual toggling.
 ./install.sh /path/to/home desktop
 ```
 
-The installer copies `keep-awake.mjs` (and a default `flags.json`, only if
-absent) into `<home>/keep-awake/` and registers the plugin in
-`<home>/profiles/<profile>/cordis.patch.yml` as a file-path insert:
+The installer copies `keep-awake.mjs` into `<home>/keep-awake/` and
+registers the plugin in `<home>/profiles/<profile>/cordis.patch.yml` as a
+file-path insert with its default config:
 
 ```yaml
 - insert:
   - id: keep-awake
     name: "/path/to/home/keep-awake/keep-awake.mjs"
+    config:
+      enabled: true
+      flags:
+        idle: true
+        system: true
+        display: false
+        disk: false
 ```
 
-The installer is idempotent — re-running it never overwrites your
-`flags.json` or duplicates the patch entry.
+The installer is idempotent — an existing `keep-awake` entry is left
+untouched (edit that block in place to change the settings).
 
-On a running instance with the DSH HMR plugin enabled the profile-patch
-watcher picks the change up live; otherwise restart DSH.
+A fresh install needs a DSH restart. On a running instance with the DSH HMR
+plugin enabled, later changes to the `config:` block apply live; replacing
+the plugin file itself (an update) needs a restart, since the current
+hot-swap reloads the entry in place and may leave the previous assertion
+process behind.
 
 ## Configuration
 
-`flags.json` next to the plugin: an array of single-letter `caffeinate`
-flags. Missing or invalid file → the idle-sleep-only default `-i`.
+Everything is configured in the `config:` block of the patch entry — a
+master toggle plus one checkbox per `caffeinate` flag. Omitted values fall
+back to the defaults shown above (`idle` + `system` on).
 
-| Flag | Assertion                          | Notes                                  |
-|------|------------------------------------|----------------------------------------|
-| `-i` | prevent **idle** system sleep      | the core use case; default            |
-| `-s` | prevent **system** sleep           | AC power only; the lid-closed flag    |
-| `-d` | prevent display sleep              | optional                              |
-| `-m` | prevent disk idle sleep            | optional                              |
+| Key              | Flag | Assertion                       | Default | Notes                          |
+|------------------|------|---------------------------------|---------|--------------------------------|
+| `enabled`        | —    | the plugin is active            | `true`  | the master toggle              |
+| `flags.idle`     | `-i` | prevent **idle** system sleep   | `true`  | the core use case              |
+| `flags.system`   | `-s` | prevent **system** sleep        | `true`  | AC power only; lid-closed flag |
+| `flags.display`  | `-d` | prevent display sleep           | `false` | optional                       |
+| `flags.disk`     | `-m` | prevent disk idle sleep         | `false` | optional                       |
 
-Example (idle + lid-closed coverage on AC power):
+Example (idle + lid-closed coverage on AC power — the default):
 
-```json
-["-i", "-s"]
+```yaml
+    config:
+      enabled: true
+      flags:
+        idle: true
+        system: true
+```
+
+Turning the plugin off:
+
+```yaml
+    config:
+      enabled: false
 ```
 
 ### Lid-closed (clamshell)
@@ -108,6 +131,11 @@ pkill -f "caffeinate -i"   # only the plugin's own instance, if one is live
 
 ## Notes
 
+- The toggle and the flag checkboxes live in the profile patch, not in the
+  Settings UI: the current DSH build has no generic per-plugin settings form
+  for file-path plugins (each Settings page is a hand-written client
+  plugin). The config shape above is the standard DSH plugin-config channel,
+  so moving it into a real settings surface is trivial once one exists.
 - This is a **file-path plugin**, not an npm package: it is not registered in
   any DSH bundle and ships no schema, which keeps it a pure local opt-in. If
   you want it as a first-class package (Schemastery config, tests, bundle

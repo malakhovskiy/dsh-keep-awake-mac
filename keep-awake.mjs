@@ -1,20 +1,28 @@
 /**
- * macOS keep-awake: hold a power assertion while any DSH agent is working.
+ * macOS keep-awake (v2, config-driven): hold a power assertion while any DSH
+ * agent is working.
  *
- * Loads as a no-op off macOS. The assertion lives as long as at least one
- * agent reports `running` (the `agent/status` transitions) and is released the
- * moment the last running agent goes idle or is disposed — no timer windows.
+ * Loads as a no-op off macOS, or when `enabled` is false. The assertion lives
+ * as long as at least one agent reports `running` (the `agent/status`
+ * transitions) and is released the moment the last running agent goes idle or
+ * is disposed — no timer windows.
  *
  * The caffeinate process is tied to the host PID with `-w`, so it cannot
  * outlive the harness process even if the managed-range teardown is missed.
  *
- * Flags come from `flags.json` next to this file when present (an array of
- * single-letter caffeinate flags, e.g. `["-i", "-s"]`; `-s` adds the
- * AC-power system-sleep assertion for lid-closed work). Missing or invalid
- * file: the idle-sleep-only default `-i`.
+ * Configuration (the profile patch `config:` block, all optional — defaults
+ * are merged for omitted values):
+ *
+ *   config:
+ *     enabled: true
+ *     flags:
+ *       idle: true      # -i  prevent idle system sleep (the core use case)
+ *       system: true    # -s  prevent system sleep; AC power only (lid-closed)
+ *       display: false  # -d  prevent display sleep
+ *       disk: false     # -m  prevent disk idle sleep
  */
-import { existsSync, readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { existsSync } from 'node:fs'
+import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 export const name = 'keep-awake'
@@ -23,24 +31,27 @@ export const inject = ['agents', 'subprocess']
 const here = dirname(fileURLToPath(import.meta.url))
 const CAFFEINATE = '/usr/bin/caffeinate'
 const GRACE_MS = 3000
+const DEFAULTS = {
+  enabled: true,
+  flags: { idle: true, system: true, display: false, disk: false },
+}
+const FLAG_LETTERS = { idle: 'i', system: 's', display: 'd', disk: 'm' }
 
-function readFlags() {
-  const file = join(here, 'flags.json')
-  if (!existsSync(file)) return ['-i']
-  try {
-    const flags = JSON.parse(readFileSync(file, 'utf8'))
-    if (Array.isArray(flags) && flags.length > 0 && flags.every((flag) => typeof flag === 'string' && /^-[disum]$/.test(flag))) {
-      return flags
-    }
-  } catch {
-    // A malformed flags file falls back to the idle-sleep-only default.
+/** Merge the (optional, partial) patch config onto the defaults. */
+function resolveConfig(config) {
+  const flags = { ...DEFAULTS.flags, ...(config?.flags ?? {}) }
+  return {
+    enabled: config?.enabled ?? DEFAULTS.enabled,
+    flags,
   }
-  return ['-i']
 }
 
-export function apply(ctx) {
+export function apply(ctx, config) {
+  const resolved = resolveConfig(config)
   if (process.platform !== 'darwin' || !existsSync(CAFFEINATE)) return
-  const flags = readFlags()
+  if (!resolved.enabled) return
+  const flags = Object.keys(FLAG_LETTERS).filter(key => resolved.flags[key]).map(key => `-${FLAG_LETTERS[key]}`)
+  if (flags.length === 0) return
   const running = new Set()
   let handle = undefined
 
@@ -75,7 +86,7 @@ export function apply(ctx) {
     }
   }
 
-  // Agents that were already running when this plugin loaded (live reload
+  // Agents that were already running when this plugin loaded (a live reload
   // mid-session must not release a needed hold).
   for (const agent of ctx.agents.list()) note(agent, agent.status)
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install the dsh-keep-awake plugin into a DSH home and register it in one
-# profile's cordis.patch.yml. Idempotent: never overwrites a personal
-# flags.json, never duplicates the patch entry.
+# profile's cordis.patch.yml. Idempotent: an existing keep-awake entry is
+# left untouched (edit it in place to change the toggle or the flags).
 #
 # Usage: install.sh [DSH_HOME] [PROFILE]
 #   DSH_HOME  DSH home directory (default: $DSH_HOME, then ~/.dsh)
@@ -26,14 +26,12 @@ PATCH_FILE="$HOME_DIR/profiles/$PROFILE/cordis.patch.yml"
 
 [ -d "$HOME_DIR" ] || { echo "error: DSH home '$HOME_DIR' does not exist" >&2; exit 1; }
 
-# 1) Copy the plugin (flags.json only if absent — never clobber personal config).
+# 1) Copy the plugin file.
 mkdir -p "$DEST_DIR"
 cp "$SRC_DIR/keep-awake.mjs" "$DEST_DIR/keep-awake.mjs"
-if [ ! -f "$DEST_DIR/flags.json" ]; then
-  cp "$SRC_DIR/flags.json.example" "$DEST_DIR/flags.json"
-fi
 
-# 2) Register the file-path insert in the profile patch (idempotent).
+# 2) Register the file-path insert (with its default config block) in the
+#    profile patch. Idempotent: an existing keep-awake entry is left untouched.
 mkdir -p "$(dirname "$PATCH_FILE")"
 python3 - "$PATCH_FILE" "$DEST_DIR/keep-awake.mjs" <<'PY'
 import sys
@@ -41,9 +39,18 @@ import sys
 patch_file, plugin_path = sys.argv[1], sys.argv[2]
 entry = (
     "# Keeps the Mac awake while an agent works (dsh-keep-awake plugin).\n"
+    "# Toggle: enabled. Flags: idle=-i, system=-s (AC only, lid-closed),\n"
+    "# display=-d, disk=-m.\n"
     "- insert:\n"
     "  - id: keep-awake\n"
     f'    name: "{plugin_path}"\n'
+    "    config:\n"
+    "      enabled: true\n"
+    "      flags:\n"
+    "        idle: true\n"
+    "        system: true\n"
+    "        display: false\n"
+    "        disk: false\n"
 )
 try:
     with open(patch_file) as f:
@@ -51,7 +58,7 @@ try:
 except FileNotFoundError:
     text = ""
 if "id: keep-awake" in text:
-    print(f"already registered in {patch_file}")
+    print(f"keep-awake entry already present in {patch_file} - left untouched")
     sys.exit(0)
 if text.strip() in ("", "[]"):
     text = entry
@@ -64,5 +71,5 @@ PY
 
 echo
 echo "Installed: $DEST_DIR/keep-awake.mjs"
-echo "If a DSH instance with the HMR plugin is running, the profile-patch watcher picks this up live;"
-echo "otherwise restart DSH. Verify while an agent works: pgrep -fl caffeinate"
+echo "A fresh install needs a DSH restart; later config changes in the profile patch apply live"
+echo "(while the DSH HMR plugin is enabled). Verify while an agent works: pgrep -fl caffeinate"
